@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "188667015579",
+    "project_id": "nhung-btl-tactc",
+    "storage_bucket": "nhung-btl-tactc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:188667015579:android:cf75273a155054ac52b13e",
+        "android_client_info": {
+          "package_name": "com.example.pet_feeder_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAfrMyBfo5TAN10MYJnnH04JriZtVgIyoQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

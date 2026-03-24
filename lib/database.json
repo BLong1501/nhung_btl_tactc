@@ -1,0 +1,19 @@
+{
+  "devices": {
+    "esp32_device_01": {
+      "status": "online",
+      "food_level_percent": 85,
+      "camera_ip": "http://192.168.1.15:8080/video",
+      "schedules": {
+        "08:00": {
+          "enabled": true,
+          "duration_sec": 4
+        },
+        "18:30": {
+          "enabled": true,
+          "duration_sec": 6
+        }
+      }
+    }
+  }
+}
