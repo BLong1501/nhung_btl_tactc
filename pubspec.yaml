@@ -36,8 +36,12 @@ dependencies:
   cupertino_icons: ^1.0.8
   firebase_core: ^4.5.0
   firebase_database: ^12.1.4
+  firebase_auth: ^6.2.0       # Authentication (login/register) - compatible with firebase_core
   intl: ^0.20.2
-  flutter_mjpeg: ^2.0.4
+  # Camera streaming - using video_player for all methods
+  video_player: ^2.8.0       # MJPEG, HLS, RTSP streaming
+  url_launcher: ^6.2.0       # Open web browser for IP Webcam
+  flutter_inappwebview: ^6.0.0  # Embed web browser in app (better Windows support)
 
 dev_dependencies:
   flutter_test:
