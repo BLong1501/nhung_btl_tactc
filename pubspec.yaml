@@ -42,6 +42,7 @@ dependencies:
   video_player: ^2.8.0       # MJPEG, HLS, RTSP streaming
   url_launcher: ^6.2.0       # Open web browser for IP Webcam
   flutter_inappwebview: ^6.0.0  # Embed web browser in app (better Windows support)
+  image_picker: ^1.0.0       # Pick images from gallery or camera
 
 dev_dependencies:
   flutter_test:
