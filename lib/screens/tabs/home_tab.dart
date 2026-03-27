@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../config/theme.dart';
 import '../../config/constants.dart';
 import '../../config/firebase_config.dart';
@@ -30,15 +31,19 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   bool _showSuccessCheckmark = false;
   List<Map<String, dynamic>> _recentHistory = [];
   bool _isLoadingHistory = true;
+  String _previousFoodLevelStatus =
+      'unknown'; // Track previous status for change detection
 
   // ========== Firebase References ==========
   late DatabaseReference _foodLevelRef;
   late DatabaseReference _historyRef;
   late DatabaseReference _commandRef;
+  late DatabaseReference _notificationsRef;
 
   // ========== Stream Subscriptions ==========
   late StreamSubscription<DatabaseEvent> _foodLevelSubscription;
   late StreamSubscription<DatabaseEvent> _historySubscription;
+  OverlayEntry? _notificationOverlay;
 
   @override
   void initState() {
@@ -58,6 +63,12 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     _historyRef = database.ref(AppConstants.historyPath);
     _commandRef = database.ref(AppConstants.commandPath);
 
+    // Initialize notifications ref
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      _notificationsRef = database.ref('users/${user.uid}/notifications');
+    }
+
     print('[HomeTab] Firebase refs initialized');
   }
 
@@ -67,8 +78,21 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
       (DatabaseEvent event) {
         if (mounted && event.snapshot.value != null) {
           final value = event.snapshot.value;
+          final newLevel = (value is int)
+              ? value.toDouble()
+              : (value as double);
+          final newStatus = _getFoodLevelStatus(newLevel);
+
+          // ✅ Kiểm tra nếu status thay đổi
+          if (newStatus != _previousFoodLevelStatus &&
+              _previousFoodLevelStatus != 'unknown') {
+            _showFoodLevelChangeToast(newStatus);
+            _saveSensorNotification(newStatus);
+          }
+
           setState(() {
-            _foodLevel = (value is int) ? value.toDouble() : (value as double);
+            _foodLevel = newLevel;
+            _previousFoodLevelStatus = newStatus;
           });
         }
       },
@@ -227,6 +251,111 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
     }
   }
 
+  /// Convert food level percentage to status
+  String _getFoodLevelStatus(double foodLevel) {
+    if (foodLevel >= 75) return 'full'; // Đầy
+    if (foodLevel >= 50) return 'medium'; // Trung bình
+    if (foodLevel >= 25) return 'low'; // Ít
+    if (foodLevel > 0) return 'empty'; // Sắp hết
+    return 'empty'; // Sắp hết
+  }
+
+  /// Show notification at top-right corner with animation
+  void _showFoodLevelChangeToast(String newStatus) {
+    String message = '';
+    Color bgColor = Colors.grey;
+
+    switch (newStatus) {
+      case 'full':
+        message = '🟢 Thức ăn đầy - Sẵn sàng cho ăn!';
+        bgColor = const Color.fromARGB(255, 148, 224, 150);
+        break;
+      case 'medium':
+        message = '🟡 Thức ăn ở mức trung bình';
+        bgColor = Colors.blue;
+        break;
+      case 'low':
+        message = '🟠 Thức ăn ít - Vui lòng thêm thức ăn';
+        bgColor = const Color.fromARGB(255, 241, 223, 57);
+        break;
+      case 'empty':
+        message = '🔴 Thức ăn sắp hết - Cần thêm ngay!';
+        bgColor = const Color.fromARGB(255, 245, 79, 68);
+        break;
+    }
+
+    // Remove previous notification if exists
+    _notificationOverlay?.remove();
+
+    // Create new notification overlay
+    _notificationOverlay = OverlayEntry(
+      builder: (context) => Positioned(
+        top: 60,
+        right: 16,
+        child: _NotificationWidget(
+          message: message,
+          bgColor: bgColor,
+          onDismiss: () {
+            _notificationOverlay?.remove();
+            _notificationOverlay = null;
+          },
+        ),
+      ),
+    );
+
+    // Insert overlay
+    Overlay.of(context).insert(_notificationOverlay!);
+
+    // Auto-dismiss after 3 seconds
+    Future.delayed(const Duration(seconds: 3), () {
+      if (_notificationOverlay != null) {
+        _notificationOverlay?.remove();
+        _notificationOverlay = null;
+      }
+    });
+  }
+
+  /// Save sensor notification to Firebase
+  Future<void> _saveSensorNotification(String status) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final notificationId = '${DateTime.now().millisecondsSinceEpoch}';
+      final message = _getNotificationMessage(status);
+      final timestamp = DateTime.now().toIso8601String();
+
+      await _notificationsRef.child(notificationId).set({
+        'id': notificationId,
+        'status': status,
+        'message': message,
+        'timestamp': timestamp,
+        'read': false,
+        'type': 'sensor_food_level',
+      });
+
+      print('[HomeTab] ✅ Thông báo đã lưu: $notificationId');
+    } catch (e) {
+      print('[HomeTab] ❌ Lỗi lưu thông báo: $e');
+    }
+  }
+
+  /// Get notification message based on status
+  String _getNotificationMessage(String status) {
+    switch (status) {
+      case 'full':
+        return 'Thức ăn đã đầy';
+      case 'medium':
+        return 'Mức thức ăn ở trung bình';
+      case 'low':
+        return 'Mức thức ăn thấp - Cần thêm thức ăn';
+      case 'empty':
+        return 'Thức ăn sắp hết - Thêm ngay';
+      default:
+        return 'Thông báo từ cảm biến';
+    }
+  }
+
   String _formatTime(int timestamp) {
     if (timestamp == 0) return '--:--';
 
@@ -267,12 +396,9 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
           Text('🏠 Bảng Điều Khiển', style: AppTextStyles.heading1),
           SizedBox(height: AppConstants.paddingSmall),
           Text(
-            'Điều khiển cho ăn cho thú cưng của bạn',
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: AppColors.greyDark.withOpacity(0.7),
-            ),
+            'Lượng thức ăn còn lại',
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.greyDark),
           ),
-          SizedBox(height: AppConstants.paddingLarge),
 
           // ===== Food Level Section =====
           Container(
@@ -298,32 +424,20 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
                 // Circular Food Level Indicator
                 FoodLevelCircle(foodLevel: _foodLevel),
                 SizedBox(height: AppConstants.paddingLarge),
-
-                // Food Level Info Text
-                RichText(
-                  text: TextSpan(
-                    children: [
-                      TextSpan(
-                        text: 'Thức ăn hiện tại: ',
-                        style: AppTextStyles.bodyMedium,
-                      ),
-                      TextSpan(
-                        text: '${_foodLevel.toStringAsFixed(0)}%',
-                        style: AppTextStyles.heading2.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
               ],
             ),
           ),
           SizedBox(height: AppConstants.paddingLarge),
 
           // ===== Amount Selector Section =====
-          Text('📊 Chọn Lượng Cho Ăn', style: AppTextStyles.heading2),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset('assets/icon/speedometer.png', width: 28, height: 28),
+              const SizedBox(width: 8),
+              Text('Chọn Mức Thức Ăn', style: AppTextStyles.heading2),
+            ],
+          ),
           SizedBox(height: AppConstants.paddingMedium),
           FeedAmountSelector(
             initialAmount: _selectedAmount,
@@ -349,7 +463,14 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('📝 Lịch Sử Gần Đây', style: AppTextStyles.heading2),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Image.asset('assets/icon/history.png', width: 28, height: 28),
+                  const SizedBox(width: 8),
+                  Text('Lịch Sử Gần Đây', style: AppTextStyles.heading2),
+                ],
+              ),
               if (_recentHistory.isNotEmpty)
                 TextButton(
                   onPressed: widget.onNavigateToHistory,
@@ -396,58 +517,80 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
               ),
             )
           else
-            Column(
-              children: _recentHistory.take(4).map((history) {
-                final timestamp = history['timestamp'] as int;
-                final amount = history['amount'] as String? ?? 'medium';
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 50),
+              child: Column(
+                children: _recentHistory.take(4).map((history) {
+                  final timestamp = history['timestamp'] as int;
+                  final amount = history['amount'] as String? ?? 'medium';
 
-                return Container(
-                  margin: EdgeInsets.only(bottom: AppConstants.paddingSmall),
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(
-                      AppConstants.radiusMedium,
+                  return Container(
+                    margin: EdgeInsets.only(bottom: AppConstants.paddingSmall),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: AppConstants.paddingMedium,
+                      vertical: 8,
                     ),
-                    border: Border(
-                      left: BorderSide(color: AppColors.primary, width: 3),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Thời gian
-                      Text(
-                        _formatTime(timestamp),
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.greyDark,
-                        ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(
+                        AppConstants.radiusMedium,
                       ),
-                      // Lượng cho ăn
-                      Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
+                      border: Border.all(
+                        color: AppColors.primary.withOpacity(0.2),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 4,
+                          offset: Offset(0, 2),
                         ),
-                        decoration: BoxDecoration(
-                          color: AppColors.secondary.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          '${amountLabels[amount] ?? 'Vừa'} ${amountEmojis[amount] ?? '🍖'}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.secondary,
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        // Cột trái: Thời gian (giữa gạch đỏ bên trái)
+                        Expanded(
+                          child: Center(
+                            child: Text(
+                              _formatTime(timestamp),
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.greyDark,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
+                        // Cột phải: Mức + Icon (sát lề trái gạch đỏ bên phải)
+                        Expanded(
+                          child: Padding(
+                            padding: EdgeInsets.only(left: 8),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Text(
+                                  amountLabels[amount] ?? 'Vừa',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.greyDark,
+                                  ),
+                                ),
+                                SizedBox(width: 6),
+                                Text(
+                                  amountEmojis[amount] ?? '🍖',
+                                  style: TextStyle(fontSize: 16),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
             ),
           SizedBox(height: AppConstants.paddingLarge),
         ],
@@ -459,7 +602,91 @@ class _HomeTabState extends State<HomeTab> with TickerProviderStateMixin {
   void dispose() {
     _foodLevelSubscription.cancel();
     _historySubscription.cancel();
+    _notificationOverlay?.remove();
     print('[HomeTab] Disposed - all listeners cancelled');
     super.dispose();
+  }
+}
+
+// ============================================================================
+// NOTIFICATION WIDGET - Top-Right Corner Notification
+// ============================================================================
+
+class _NotificationWidget extends StatefulWidget {
+  final String message;
+  final Color bgColor;
+  final VoidCallback onDismiss;
+
+  const _NotificationWidget({
+    required this.message,
+    required this.bgColor,
+    required this.onDismiss,
+  });
+
+  @override
+  State<_NotificationWidget> createState() => _NotificationWidgetState();
+}
+
+class _NotificationWidgetState extends State<_NotificationWidget>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+
+    _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
+    );
+
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0.5, -0.5), end: Offset.zero).animate(
+          CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
+        );
+
+    _animationController.forward();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SlideTransition(
+      position: _slideAnimation,
+      child: FadeTransition(
+        opacity: _fadeAnimation,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: widget.bgColor,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                widget.message,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  decoration: TextDecoration.none,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

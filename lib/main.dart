@@ -91,7 +91,7 @@ class PetFeederApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Smart Pet Feeder',
+      title: 'Pet Feeder',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.orange),
         useMaterial3: true,
@@ -181,7 +181,10 @@ class _LoginScreenState extends State<LoginScreen> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Colors.orange[400]!, Colors.orange[800]!],
+            colors: [
+              Colors.orange[400]!,
+              const Color.fromARGB(255, 0, 239, 147)!,
+            ],
           ),
         ),
         child: Center(
@@ -208,7 +211,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   // Title
                   const Text(
-                    'Smart Pet Feeder',
+                    'Pet Feeder',
                     style: TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.bold,
@@ -216,11 +219,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Hệ thống cấp thức ăn thông minh',
-                    style: TextStyle(fontSize: 14, color: Colors.white70),
-                  ),
-                  const SizedBox(height: 48),
 
                   // Email Field
                   TextField(
@@ -337,7 +335,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           style: TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
-                            decoration: TextDecoration.underline,
                           ),
                         ),
                       ),
@@ -480,7 +477,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Smart Pet Feeder',
+                    'Pet Feeder',
                     style: TextStyle(fontSize: 14, color: Colors.white70),
                   ),
                   const SizedBox(height: 40),
@@ -670,53 +667,74 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       const HistoryTab(),
     ];
 
-    // Initialize sensor listener for real-time HC-SR04 notifications
-    _initSensorListener();
-    
-    // Initialize notification listener for badge update
-    _initNotificationListener();
-    
-    // Load initial unread count
-    _loadUnreadCount();
+    // Defer initialization until after build completes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeServices();
+    });
+  }
+
+  Future<void> _initializeServices() async {
+    try {
+      // Load notification count first
+      await _loadUnreadCount();
+
+      // Then initialize listeners
+      _initSensorListener();
+      _initNotificationListener();
+    } catch (e) {
+      print('[MainNav] Initialization error: $e');
+    }
   }
 
   void _initSensorListener() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    // Get device ID from Firebase storage
     final database = FirebaseDatabase.instanceFor(
       app: Firebase.app(),
       databaseURL: FIREBASE_DATABASE_URL,
     );
+
+    // Use timeout to prevent hanging
     database
         .ref()
         .child('users')
         .child(user.uid)
         .child('device_id')
         .get()
+        .timeout(
+          const Duration(seconds: 5),
+          onTimeout: () => throw TimeoutException('Device ID fetch timeout'),
+        )
         .then((snapshot) {
-          if (snapshot.exists) {
-            final deviceId = snapshot.value as String;
-            SensorListenerService().startListening(
-              deviceId: deviceId,
-              onStatusChanged: (String status, String message) {
-                // Show toast notification
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(message),
-                      duration: const Duration(seconds: 4),
-                      backgroundColor: _getColorForStatus(status),
-                    ),
-                  );
-                }
-              },
-            );
-
-            // Add listener for badge updates
-            SensorListenerService().addListener(_loadUnreadCount);
+          if (snapshot.exists && mounted) {
+            try {
+              final deviceId = snapshot.value as String;
+              if (deviceId.isNotEmpty) {
+                SensorListenerService().startListening(
+                  deviceId: deviceId,
+                  onStatusChanged: (String status, String message) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(message),
+                          duration: const Duration(seconds: 4),
+                          backgroundColor: _getColorForStatus(status),
+                        ),
+                      );
+                    }
+                  },
+                );
+                SensorListenerService().addListener(_loadUnreadCount);
+              }
+            } catch (e) {
+              print('[MainNav] Error parsing device ID: $e');
+            }
           }
+        })
+        .catchError((error) {
+          print('[MainNav] Sensor listener init error: $error');
+          // Continue without sensor listener
         });
   }
 
@@ -734,17 +752,30 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
         .child(user.uid)
         .child('notifications');
 
-    _notificationListener = ref.onValue.listen((_) {
-      _loadUnreadCount();
-    });
+    _notificationListener = ref.onValue.listen(
+      (_) {
+        // Debounce to prevent too many setState calls
+        _loadUnreadCount();
+      },
+      onError: (error) {
+        print('[MainNav] Notification listener error: $error');
+      },
+    );
   }
 
   Future<void> _loadUnreadCount() async {
-    final count = await NotificationDialog.getUnreadCount();
-    if (mounted) {
-      setState(() {
-        _unreadNotifications = count;
-      });
+    try {
+      final count = await NotificationDialog.getUnreadCount().timeout(
+        const Duration(seconds: 3),
+        onTimeout: () => 0,
+      );
+      if (mounted) {
+        setState(() {
+          _unreadNotifications = count;
+        });
+      }
+    } catch (e) {
+      print('[MainNav] Error loading unread count: $e');
     }
   }
 
@@ -780,7 +811,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Smart Pet Feeder',
+          'Pet Feeder',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
@@ -828,9 +859,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
 
                 if (confirmed == true) {
                   await AuthService().logout();
-                  if (context.mounted) {
-                    Navigator.of(context).pushReplacementNamed('/');
-                  }
+                  // StreamBuilder sẽ tự động rebuild khi logout() emit null user
                 }
               }
             },
@@ -894,7 +923,11 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                 value: 'notifications',
                 child: Row(
                   children: [
-                    Icon(Icons.notifications, color: Colors.orange[600], size: 20),
+                    Icon(
+                      Icons.notifications,
+                      color: Colors.orange[600],
+                      size: 20,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: const Text(
@@ -1020,17 +1053,59 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
             _selectedIndex = index;
           });
         },
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Trang chủ'),
+        items: [
           BottomNavigationBarItem(
-            icon: Icon(Icons.camera_alt),
+            icon: SizedBox(
+              width: 24,
+              height: 24,
+              child: Image.asset('assets/icon/homepage.png'),
+            ),
+            activeIcon: SizedBox(
+              width: 24,
+              height: 24,
+              child: Image.asset('assets/icon/homepage.png'),
+            ),
+            label: 'Trang chủ',
+          ),
+          BottomNavigationBarItem(
+            icon: SizedBox(
+              width: 24,
+              height: 24,
+              child: Image.asset('assets/icon/cctv-camera.png'),
+            ),
+            activeIcon: SizedBox(
+              width: 24,
+              height: 24,
+              child: Image.asset('assets/icon/cctv-camera.png'),
+            ),
             label: 'Camera',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.access_time),
-            label: 'Đặt lịch',
+            icon: SizedBox(
+              width: 24,
+              height: 24,
+              child: Image.asset('assets/icon/clock.png'),
+            ),
+            activeIcon: SizedBox(
+              width: 24,
+              height: 24,
+              child: Image.asset('assets/icon/clock.png'),
+            ),
+            label: 'Hẹn giờ',
           ),
-          BottomNavigationBarItem(icon: Icon(Icons.history), label: 'Lịch sử'),
+          BottomNavigationBarItem(
+            icon: SizedBox(
+              width: 24,
+              height: 24,
+              child: Image.asset('assets/icon/history.png'),
+            ),
+            activeIcon: SizedBox(
+              width: 24,
+              height: 24,
+              child: Image.asset('assets/icon/history.png'),
+            ),
+            label: 'Lịch sử',
+          ),
         ],
       ),
     );

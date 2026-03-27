@@ -133,10 +133,6 @@ class _CameraTabState extends State<CameraTab>
                     ),
                   ),
 
-
-
-
-
                 // Floating Eye Icon (Top Right - when sidebar is hidden)
                 if (!_showInfoPanel && !_showControls)
                   Positioned(
@@ -319,11 +315,8 @@ class _CameraTabState extends State<CameraTab>
             ),
         ],
       ),
-
     );
   }
-
-
 }
 
 // ============================================================================

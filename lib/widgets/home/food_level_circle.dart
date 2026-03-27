@@ -71,8 +71,10 @@ class _FoodLevelCircleState extends State<FoodLevelCircle>
   }
 
   String _getLevelStatus() {
-    if (widget.foodLevel > 60) return 'Đầy';
-    if (widget.foodLevel > 30) return 'Trung bình';
+    if (widget.foodLevel > 75) return 'Đầy';
+    if (widget.foodLevel > 50) return 'Trung bình';
+    if (widget.foodLevel > 25) return 'Ít';
+    if (widget.foodLevel > 0) return 'Sắp hết';
     return 'Sắp hết';
   }
 
@@ -81,97 +83,107 @@ class _FoodLevelCircleState extends State<FoodLevelCircle>
     return AnimatedBuilder(
       animation: _animation,
       builder: (context, child) {
-        return Container(
-          height: 280,
-          alignment: Alignment.center,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Background circle (outer ring)
-              Container(
-                width: 260,
-                height: 260,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primary.withOpacity(0.2),
-                      blurRadius: 20,
-                      spreadRadius: 5,
-                    ),
-                  ],
-                ),
-              ),
-
-              // Animated progress circle
-              SizedBox(
-                width: 240,
-                height: 240,
-                child: CustomPaint(
-                  painter: _CircleProgressPainter(
-                    progress: _animation.value,
-                    backgroundColor: AppColors.greyLight,
-                    progressColor: _getLevelColor(),
-                    strokeWidth: 18,
-                  ),
-                ),
-              ),
-
-              // Center content
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+        return Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Circular progress indicator
+            Container(
+              height: 280,
+              alignment: Alignment.center,
+              child: Stack(
+                alignment: Alignment.center,
                 children: [
-                  // Cute Pet Icon
-                  Text('🐕', style: TextStyle(fontSize: 56)),
-                  SizedBox(height: 12),
-
-                  // Percentage
-                  Text(
-                    '${widget.foodLevel.toStringAsFixed(0)}%',
-                    style: TextStyle(
-                      fontSize: 48,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.greyDark,
-                    ),
-                  ),
-                  SizedBox(height: 8),
-
-                  // Status label with gradient
+                  // Background circle (outer ring)
                   Container(
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    width: 260,
+                    height: 260,
                     decoration: BoxDecoration(
-                      gradient: _getLevelColor() == AppColors.accent
-                          ? LinearGradient(
-                              colors: [AppColors.accent, AppColors.accentPink],
-                            )
-                          : _getLevelColor() == AppColors.secondary
-                          ? AppColors.secondaryGradient
-                          : LinearGradient(
-                              colors: [AppColors.error, Color(0xFFC0392B)],
-                            ),
-                      borderRadius: BorderRadius.circular(20),
+                      shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: _getLevelColor().withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: Offset(0, 4),
+                          color: AppColors.primary.withOpacity(0.2),
+                          blurRadius: 20,
+                          spreadRadius: 5,
                         ),
                       ],
                     ),
-                    child: Text(
-                      _getLevelStatus(),
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        letterSpacing: 0.5,
+                  ),
+
+                  // Animated progress circle
+                  SizedBox(
+                    width: 240,
+                    height: 240,
+                    child: CustomPaint(
+                      painter: _CircleProgressPainter(
+                        progress: _animation.value,
+                        backgroundColor: AppColors.greyLight,
+                        progressColor: _getLevelColor(),
+                        strokeWidth: 18,
                       ),
                     ),
                   ),
+
+                  // Center content - Pet icon and percentage only
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Cute Pet Icon
+                      Image.asset(
+                        'assets/icon/pets.png',
+                        width: 56,
+                        height: 56,
+                      ),
+                      SizedBox(height: 6),
+
+                      // Percentage
+                      Text(
+                        '${widget.foodLevel.toStringAsFixed(0)}%',
+                        style: TextStyle(
+                          fontSize: 36,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.greyDark,
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
-            ],
-          ),
+            ),
+
+            // Status label outside circle - no overlap
+            SizedBox(height: 16),
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              decoration: BoxDecoration(
+                gradient: _getLevelColor() == AppColors.accent
+                    ? LinearGradient(
+                        colors: [AppColors.accent, AppColors.accentPink],
+                      )
+                    : _getLevelColor() == AppColors.secondary
+                    ? AppColors.secondaryGradient
+                    : LinearGradient(
+                        colors: [AppColors.error, Color(0xFFC0392B)],
+                      ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: _getLevelColor().withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Text(
+                _getLevelStatus(),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ],
         );
       },
     );

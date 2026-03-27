@@ -363,7 +363,14 @@ class _HistoryTabState extends State<HistoryTab> {
       appBar: AppBar(
         title: isSelectionMode
             ? Text('${selectedIds.length} mục được chọn')
-            : const Text('📊 Lịch sử cho ăn'),
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Image.asset('assets/icon/history.png', width: 24, height: 24),
+                  const SizedBox(width: 8),
+                  const Text('Lịch sử cho ăn'),
+                ],
+              ),
         centerTitle: true,
         elevation: 2,
         backgroundColor: const Color.fromARGB(255, 78, 226, 206),
@@ -424,9 +431,10 @@ class _HistoryTabState extends State<HistoryTab> {
                       color: Colors.grey[100],
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: Icon(
-                      Icons.history,
-                      size: 80,
+                    child: Image.asset(
+                      'assets/icon/history.png',
+                      width: 80,
+                      height: 80,
                       color: Colors.grey[400],
                     ),
                   ),

@@ -47,7 +47,7 @@ class _FeedAmountSelectorState extends State<FeedAmountSelector> {
     int sizeIndex,
   ) {
     final isSelected = _selectedAmount == amount;
-    final sizes = [32, 42, 52]; // Icon sizes
+    final sizes = [36, 36, 36]; // Icon sizes
     final iconSize = sizes[sizeIndex];
 
     return Expanded(
@@ -119,16 +119,6 @@ class _FeedAmountSelectorState extends State<FeedAmountSelector> {
                   letterSpacing: 0.3,
                 ),
               ),
-              SizedBox(height: 2),
-              // Duration
-              Text(
-                '${amountToDuration[amount]}s',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: isSelected ? Colors.white70 : AppColors.grey,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
             ],
           ),
         ),
@@ -157,13 +147,19 @@ class _FeedAmountSelectorState extends State<FeedAmountSelector> {
           // Label
           Padding(
             padding: EdgeInsets.only(bottom: AppConstants.paddingSmall),
-            child: Text(
-              '🍽️ Chọn lượng cho ăn',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: AppColors.greyDark,
-              ),
+            child: Row(
+              children: [
+                Image.asset('assets/icon/dish.png', width: 20, height: 20),
+                SizedBox(width: 8),
+                Text(
+                  'Phân Lượng',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.greyDark,
+                  ),
+                ),
+              ],
             ),
           ),
           // Buttons

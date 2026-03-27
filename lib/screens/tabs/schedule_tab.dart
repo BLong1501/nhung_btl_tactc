@@ -52,7 +52,7 @@ class _ScheduleTabState extends State<ScheduleTab> {
 
   Future<void> _addNewSchedule() async {
     String scheduleId = 'schedule_${DateTime.now().millisecondsSinceEpoch}';
-    String time = '07:00';
+    String time = '00:00';
     String amount = 'medium';
     List<int> defaultDays = [2, 3, 4, 5, 6];
 
@@ -178,10 +178,10 @@ class _ScheduleTabState extends State<ScheduleTab> {
                         color: Colors.white24,
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      child: Icon(
-                        Icons.schedule,
-                        size: 80,
-                        color: Colors.white70,
+                      child: Image.asset(
+                        'assets/icon/clock_1.png',
+                        width: 80,
+                        height: 80,
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -266,10 +266,10 @@ class _ScheduleTabState extends State<ScheduleTab> {
                                   : Colors.grey[200],
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Icon(
-                              Icons.schedule,
-                              color: enabled ? Colors.orange[700] : Colors.grey,
-                              size: 24,
+                            child: Image.asset(
+                              'assets/icon/clock_1.png',
+                              width: 24,
+                              height: 24,
                             ),
                           ),
                         ],
@@ -302,10 +302,10 @@ class _ScheduleTabState extends State<ScheduleTab> {
                             ),
                             child: Text(
                               amount == 'small'
-                                  ? 'Ít 🍗'
+                                  ? 'Cho ăn Ít 🍗'
                                   : amount == 'medium'
-                                  ? 'Vừa 🍖'
-                                  : 'Nhiều 🍗🍖',
+                                  ? 'Cho ăn Vừa 🍖'
+                                  : 'Cho ăn Nhiều 🍗🍖',
                               style: const TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w500,
@@ -449,6 +449,8 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
   late String _selectedTime;
   late String _selectedAmount;
   late List<int> _selectedDays;
+  late FixedExtentScrollController _hoursController;
+  late FixedExtentScrollController _minutesController;
 
   final List<String> _dayNames = [
     'Chủ nhật',
@@ -466,13 +468,33 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
     _selectedTime = widget.initialTime;
     _selectedAmount = widget.initialAmount;
     _selectedDays = List.from(widget.initialDays);
+
+    // Parse initial time and initialize scroll controllers
+    List<String> timeParts = _selectedTime.split(':');
+    int initialHour = int.parse(timeParts[0]);
+    int initialMinute = int.parse(timeParts[1]);
+
+    // Start from middle of a large range to allow infinite scroll in both directions
+    _hoursController = FixedExtentScrollController(
+      initialItem: initialHour + 1200, // 1200 = 24*50 (50 cycles in)
+    );
+    _minutesController = FixedExtentScrollController(
+      initialItem: initialMinute + 3000, // 3000 = 60*50 (50 cycles in)
+    );
+  }
+
+  @override
+  void dispose() {
+    _hoursController.dispose();
+    _minutesController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
       expand: false,
-      initialChildSize: 0.7,
+      initialChildSize: 0.9,
       maxChildSize: 0.95,
       builder: (context, scrollController) => Container(
         decoration: const BoxDecoration(
@@ -528,6 +550,7 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
                                 // Hours
                                 Expanded(
                                   child: ListWheelScrollView.useDelegate(
+                                    controller: _hoursController,
                                     itemExtent: 45,
                                     physics: const FixedExtentScrollPhysics(),
                                     onSelectedItemChanged: (index) {
@@ -541,34 +564,32 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
                                         () => _selectedTime = '$hour:$minute',
                                       );
                                     },
-                                    childDelegate:
-                                        ListWheelChildBuilderDelegate(
-                                          builder: (context, index) {
-                                            String hourValue = (index % 24)
-                                                .toString()
-                                                .padLeft(2, '0');
-                                            bool isSelected =
-                                                hourValue ==
-                                                _selectedTime.split(':')[0];
-                                            return Center(
-                                              child: Text(
-                                                hourValue,
-                                                style: TextStyle(
-                                                  fontSize: isSelected
-                                                      ? 32
-                                                      : 24,
-                                                  fontWeight: isSelected
-                                                      ? FontWeight.bold
-                                                      : FontWeight.w500,
-                                                  color: isSelected
-                                                      ? Colors.orange[800]
-                                                      : Colors.grey[600],
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                          childCount: 24,
-                                        ),
+                                    childDelegate: ListWheelChildBuilderDelegate(
+                                      builder: (context, index) {
+                                        String hourValue = (index % 24)
+                                            .toString()
+                                            .padLeft(2, '0');
+                                        bool isSelected =
+                                            hourValue ==
+                                            _selectedTime.split(':')[0];
+                                        return Center(
+                                          child: Text(
+                                            hourValue,
+                                            style: TextStyle(
+                                              fontSize: isSelected ? 32 : 24,
+                                              fontWeight: isSelected
+                                                  ? FontWeight.bold
+                                                  : FontWeight.w500,
+                                              color: isSelected
+                                                  ? Colors.orange[800]
+                                                  : Colors.grey[600],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      childCount:
+                                          2400, // 24 * 100 for infinite scroll
+                                    ),
                                   ),
                                 ),
                                 const Padding(
@@ -585,6 +606,7 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
                                 // Minutes
                                 Expanded(
                                   child: ListWheelScrollView.useDelegate(
+                                    controller: _minutesController,
                                     itemExtent: 45,
                                     physics: const FixedExtentScrollPhysics(),
                                     onSelectedItemChanged: (index) {
@@ -596,34 +618,32 @@ class _ScheduleDialogState extends State<_ScheduleDialog> {
                                         () => _selectedTime = '$hour:$minute',
                                       );
                                     },
-                                    childDelegate:
-                                        ListWheelChildBuilderDelegate(
-                                          builder: (context, index) {
-                                            String minuteValue = (index % 60)
-                                                .toString()
-                                                .padLeft(2, '0');
-                                            bool isSelected =
-                                                minuteValue ==
-                                                _selectedTime.split(':')[1];
-                                            return Center(
-                                              child: Text(
-                                                minuteValue,
-                                                style: TextStyle(
-                                                  fontSize: isSelected
-                                                      ? 32
-                                                      : 24,
-                                                  fontWeight: isSelected
-                                                      ? FontWeight.bold
-                                                      : FontWeight.w500,
-                                                  color: isSelected
-                                                      ? Colors.orange[800]
-                                                      : Colors.grey[600],
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                          childCount: 60,
-                                        ),
+                                    childDelegate: ListWheelChildBuilderDelegate(
+                                      builder: (context, index) {
+                                        String minuteValue = (index % 60)
+                                            .toString()
+                                            .padLeft(2, '0');
+                                        bool isSelected =
+                                            minuteValue ==
+                                            _selectedTime.split(':')[1];
+                                        return Center(
+                                          child: Text(
+                                            minuteValue,
+                                            style: TextStyle(
+                                              fontSize: isSelected ? 32 : 24,
+                                              fontWeight: isSelected
+                                                  ? FontWeight.bold
+                                                  : FontWeight.w500,
+                                              color: isSelected
+                                                  ? Colors.orange[800]
+                                                  : Colors.grey[600],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      childCount:
+                                          6000, // 60 * 100 for infinite scroll
+                                    ),
                                   ),
                                 ),
                               ],
